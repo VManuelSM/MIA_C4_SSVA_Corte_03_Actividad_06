@@ -112,20 +112,23 @@ def pipeline_haralick(original: np.ndarray, normalizada: np.ndarray, niveles: in
     marcada = _rgb(original).copy()
     y0, x0 = (alto - lado) // 2, (ancho - lado) // 2
     cv2.rectangle(marcada, (x0, y0), (x0 + lado - 1, y0 + lado - 1), (255, 220, 0), max(2, lado // 90))
+    # Dos renglones para que el texto sea legible a ancho de página:
+    # (a) original a lo ancho + (b); abajo (c), (d) y (e).
+    fig = plt.figure(figsize=(9.0, 6.6))
+    gs = fig.add_gridspec(2, 3, height_ratios=[1, 1], hspace=0.32, wspace=0.28)
     paneles = [
-        (marcada, f"(a) Original {ancho}×{alto}\ny recorte central", None),
-        (_rgb(normalizada), "(b) Recorte 256×256\n(INTER_AREA)", None),
-        (gris, "(c) Luminancia Y\n(0–255)", "gray"),
-        (q[96:160, 96:160], f"(d) Cuantizada a {niveles}\nniveles (zoom 64×64)", "gray"),
+        (fig.add_subplot(gs[0, :2]), marcada, f"(a) Original {ancho}×{alto} y recorte central", None),
+        (fig.add_subplot(gs[0, 2]), _rgb(normalizada), "(b) Recorte 256×256 (INTER_AREA)", None),
+        (fig.add_subplot(gs[1, 0]), gris, "(c) Luminancia Y (0–255)", "gray"),
+        (fig.add_subplot(gs[1, 1]), q[96:160, 96:160], f"(d) Cuantizada a {niveles} niveles\n(acercamiento 64×64)", "gray"),
     ]
-    fig, axes = plt.subplots(1, 5, figsize=(13, 2.9), gridspec_kw={"width_ratios": [1.4, 1, 1, 1, 1.05]})
-    for ax, (im, tit, cmap) in zip(axes, paneles):
-        ax.imshow(im, cmap=cmap, interpolation="nearest"); _sin_ejes(ax); ax.set_title(tit, fontsize=9)
-    im = axes[4].imshow(P + 1e-7, cmap="magma", norm=LogNorm(vmin=1e-5, vmax=P.max()))
-    axes[4].set_title("(e) GLCM simétrica\nd = 1, 0° (escala log)", fontsize=9)
-    axes[4].set_xlabel("nivel j"); axes[4].set_ylabel("nivel i")
-    fig.colorbar(im, ax=axes[4], fraction=0.046, pad=0.04)
-    fig.subplots_adjust(wspace=0.32)
+    for ax, im, tit, cmap in paneles:
+        ax.imshow(im, cmap=cmap, interpolation="nearest"); _sin_ejes(ax); ax.set_title(tit, fontsize=10)
+    ax_e = fig.add_subplot(gs[1, 2])
+    im = ax_e.imshow(P + 1e-7, cmap="magma", norm=LogNorm(vmin=1e-5, vmax=P.max()))
+    ax_e.set_title("(e) GLCM simétrica, d = 1, 0°\n(escala logarítmica)", fontsize=10)
+    ax_e.set_xlabel("nivel j"); ax_e.set_ylabel("nivel i")
+    fig.colorbar(im, ax=ax_e, fraction=0.046, pad=0.04)
     return _guardar(fig, ruta)
 
 
@@ -174,28 +177,30 @@ def cajas_haralick(X: np.ndarray, y: np.ndarray, columnas: Sequence[int], titulo
 def pipeline_pixeles(normalizada: np.ndarray, lado: int, ruta: Path) -> Path:
     peque = cv2.resize(normalizada, (lado, lado), interpolation=cv2.INTER_AREA)
     vector = peque.reshape(-1, 3)  # BGR por píxel, orden de renglón
-    fig = plt.figure(figsize=(13.5, 3.2))
-    gs = fig.add_gridspec(2, 4, width_ratios=[1, 1, 2.2, 2.3], height_ratios=[1, 1])
-    ax0 = fig.add_subplot(gs[:, 0]); ax0.imshow(_rgb(normalizada)); _sin_ejes(ax0)
-    ax0.set_title("(a) Recorte 256×256", fontsize=9)
-    ax1 = fig.add_subplot(gs[:, 1]); ax1.imshow(_rgb(peque), interpolation="nearest"); _sin_ejes(ax1)
-    ax1.set_title(f"(b) Reducida a {lado}×{lado}\n(INTER_AREA)", fontsize=9)
-    ax2 = fig.add_subplot(gs[:, 2])
+    # Dos renglones: arriba las tres imágenes; abajo el vector a todo lo ancho.
+    fig = plt.figure(figsize=(9.0, 4.6))
+    gs = fig.add_gridspec(3, 3, height_ratios=[1.0, 0.13, 0.55], width_ratios=[1, 1, 2.2],
+                          hspace=0.42, wspace=0.12)
+    ax0 = fig.add_subplot(gs[0, 0]); ax0.imshow(_rgb(normalizada)); _sin_ejes(ax0)
+    ax0.set_title("(a) Recorte 256×256", fontsize=10)
+    ax1 = fig.add_subplot(gs[0, 1]); ax1.imshow(_rgb(peque), interpolation="nearest"); _sin_ejes(ax1)
+    ax1.set_title(f"(b) Reducida a {lado}×{lado}\n(INTER_AREA)", fontsize=10)
+    ax2 = fig.add_subplot(gs[0, 2])
     canales = np.hstack([peque[..., 2], peque[..., 1], peque[..., 0]])
     ax2.imshow(canales, cmap="gray", interpolation="nearest"); _sin_ejes(ax2)
-    ax2.set_title("(c) Canales R | G | B", fontsize=9)
-    ax3 = fig.add_subplot(gs[0, 3])
+    ax2.set_title("(c) Canales R | G | B", fontsize=10)
     n = 96
+    ax3 = fig.add_subplot(gs[1, :])
     tira = _rgb(peque).reshape(1, -1, 3)[:, :n]
     ax3.imshow(tira, aspect="auto", interpolation="nearest"); _sin_ejes(ax3)
-    ax3.set_title(rf"(d) Vector $\mathbf{{x}}\in[0,1]^{{{3 * lado * lado}}}$: primeros {n} de {lado * lado} píxeles", fontsize=9)
-    ax4 = fig.add_subplot(gs[1, 3])
+    ax3.set_title(rf"(d) Vector $\mathbf{{x}}\in[0,1]^{{{3 * lado * lado}}}$: primeros {n} de {lado * lado} píxeles "
+                  "como tira de color (arriba) y como valores (abajo)", fontsize=10)
+    ax4 = fig.add_subplot(gs[2, :])
     vals = vector[:n, ::-1].ravel() / 255.0
     ax4.plot(vals, lw=0.8, color="#333333")
     ax4.set_xlim(0, len(vals) - 1); ax4.set_ylim(0, 1)
-    ax4.set_xlabel("componente del vector (R, G, B intercalados)", fontsize=8.5)
-    ax4.set_ylabel("valor", fontsize=8.5)
-    fig.subplots_adjust(wspace=0.12, hspace=0.6)
+    ax4.set_xlabel("componente del vector (R, G, B intercalados)", fontsize=9.5)
+    ax4.set_ylabel("valor", fontsize=9.5)
     return _guardar(fig, ruta)
 
 
